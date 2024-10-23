@@ -1,0 +1,171 @@
+esphome:
+  name: "mag-locks"
+  friendly_name: Mag Locks
+
+esp8266:
+  board: d1_mini
+  early_pin_init: false
+  restore_from_flash: true
+
+# Enable logging
+logger:
+  level: DEBUG
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "REDACTED"
+
+ota:
+  password: "REDACTED"
+  platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: true
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Mag Locks Fallback"
+    password: !secret  wifi_password
+
+captive_portal:
+
+# Web Server for emergency control (if Home Assistant dies)
+web_server:
+  port: 80
+  include_internal: false
+
+
+status_led:
+  pin:
+    number: D4
+    inverted: true
+
+# wifi diagnostics
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Strength"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+
+
+
+
+
+# is the van moving?
+binary_sensor:
+  - platform: homeassistant
+    name: "Van Moving"
+    id: van_moving
+    entity_id: binary_sensor.van_gps_movement
+
+# mag locks gpio output - Using 'switch' as it allows for restore_mode 
+switch:
+  - platform: gpio
+    id: mag_locks_bank_1
+    internal: true
+    pin: D5
+    restore_mode: restore_default_on
+    icon: mdi:magnet
+    on_turn_on:
+    - lambda: id(lock_1).publish_state(LOCK_STATE_LOCKED);
+    on_turn_off:
+    - lambda: id(lock_1).publish_state(LOCK_STATE_UNLOCKED);
+
+  - platform: gpio
+    pin: D3
+    internal: true
+    id: mag_locks_bank_2
+    restore_mode: restore_default_on
+    on_turn_on:
+    - lambda: id(lock_2).publish_state(LOCK_STATE_LOCKED);
+    on_turn_off:
+    - lambda: id(lock_2).publish_state(LOCK_STATE_UNLOCKED);
+
+  - platform: gpio
+    id: mag_locks_bank_3
+    pin: D2
+    internal: true
+    restore_mode: restore_default_on
+    on_turn_on:
+    - lambda: id(lock_3).publish_state(LOCK_STATE_LOCKED);
+    on_turn_off:
+    - lambda: id(lock_3).publish_state(LOCK_STATE_UNLOCKED);
+  
+  - platform: gpio
+    pin: D1
+    internal: true
+    restore_mode: restore_default_on
+    id: mag_locks_bank_4
+    on_turn_on:
+    - lambda: id(lock_4).publish_state(LOCK_STATE_LOCKED);
+    on_turn_off:
+    - lambda: id(lock_4).publish_state(LOCK_STATE_UNLOCKED);
+
+
+# locks to present in the Home Assistant interface
+lock:
+  - platform: template
+    name: "Kitchen Bank 1"
+    id: lock_1
+    lock_action:
+    - switch.turn_on: mag_locks_bank_1
+    unlock_action:
+      then:
+        - if:
+            condition: 
+              binary_sensor.is_off: van_moving
+            then:
+              - switch.turn_off: mag_locks_bank_1
+
+  - platform: template
+    id: lock_2
+    name: "Kitchen Bank 2"
+    lock_action:
+    - switch.turn_on: mag_locks_bank_2
+    unlock_action:
+      then:
+        - if:
+            condition: 
+              binary_sensor.is_off: van_moving
+            then:
+              - switch.turn_off: mag_locks_bank_2
+
+  - platform: template
+    id: lock_3
+    name: "Kitchen Bank 3"
+    lock_action:
+    - switch.turn_on: mag_locks_bank_3
+    unlock_action:
+      then:
+        - if:
+            condition: 
+              binary_sensor.is_off: van_moving
+            then:
+              - switch.turn_off: mag_locks_bank_3
+ 
+  - platform: template
+    id: lock_4
+    name: "Wardrobe Bank 4"
+    lock_action:
+    - switch.turn_on: mag_locks_bank_4
+    unlock_action:
+      then:
+        - if:
+            condition: 
+              binary_sensor.is_off: van_moving
+            then:
+              - switch.turn_off: mag_locks_bank_4
+
+ 
